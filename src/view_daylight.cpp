@@ -334,13 +334,14 @@ void view_daylight_render() {
     int sunR = legendsOn ? 5 : 7;
     gfx->fillCircle(sx, sy, sunR, theme.text);
 
-    // Current time floating above the sun — always small (Helvetica TINY)
+    // Current time floating above the sun — same size as sunrise/sunset
+    // labels (Inter Body 16) for visual consistency.
     char nowStr[8];
     {
         struct tm tinfo; localtime_r(&now, &tinfo);
         snprintf(nowStr, sizeof(nowStr), "%02d:%02d", tinfo.tm_hour, tinfo.tm_min);
     }
-    gfx->setFont(FONT_TINY);
+    gfx->setFont(FONT_BODY);
     gfx->setTextSize(1);
     gfx->setTextColor(theme.text);
     int16_t bx, by; uint16_t tw, th;
@@ -348,7 +349,7 @@ void view_daylight_render() {
     int nowX = sx - (int)tw / 2;
     if (nowX < lineX1) nowX = lineX1;
     if (nowX + (int)tw > lineX2) nowX = lineX2 - (int)tw;
-    gfx->setCursor(nowX, sy - sunR - 4);
+    gfx->setCursor(nowX, sy - sunR - 6);
     gfx->print(nowStr);
 
     // Sunrise / sunset — Inter Body 16 (matches the rest of the daylight

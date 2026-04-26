@@ -2,6 +2,18 @@
 
 All notable changes to SpaceTracker will be documented in this file.
 
+## [1.0.2] — 2026-04-26
+
+### Changed
+- Daylight tracker: the current-time label that floats above the sun now
+  uses the same font (Inter Body 16) as the sunrise/sunset labels for
+  visual consistency.
+
+### Added
+- GitHub Release with pre-built `bootloader.bin`, `partitions.bin`,
+  and `firmware.bin` so non-PlatformIO users can flash directly with
+  `esptool` (or LilyGo's web flasher).
+
 ## [1.0.1] — 2026-04-26
 
 First-flash fixes after hardware testing.
