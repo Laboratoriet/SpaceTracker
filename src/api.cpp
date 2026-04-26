@@ -13,9 +13,18 @@
 bool api_fetchCrew(CrewInfo &crew) {
     if (WiFi.status() != WL_CONNECTED) return false;
 
+    // The Space Devs is HTTPS — fresh TLS client per call (see note above).
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setHandshakeTimeout(15);
+
     HTTPClient http;
-    http.setTimeout(5000);
-    http.begin(ASTROS_URL);
+    http.setTimeout(15000);
+    http.setReuse(false);
+    if (!http.begin(client, ASTROS_URL)) {
+        Serial.println("[API] Astros http.begin failed");
+        return false;
+    }
 
     int httpCode = http.GET();
     if (httpCode != 200) {
@@ -24,25 +33,60 @@ bool api_fetchCrew(CrewInfo &crew) {
         return false;
     }
 
+    // Read the whole response into a String first. The payload is ~25 KB —
+    // small relative to the 8 MB PSRAM — and a String is far more reliable
+    // than streaming straight into ArduinoJson over HTTPS (chunked transfer
+    // + TLS framing has bitten us before).
     String payload = http.getString();
     http.end();
+    Serial.printf("[API] Astros payload len=%d\n", payload.length());
+    if (payload.length() < 50) {
+        Serial.println("[API] Astros payload too short");
+        return false;
+    }
+
+    // Filter so ArduinoJson only allocates the few fields we actually need.
+    // For arrays, the documented pattern is `filter[key][0]` — a one-element
+    // array template matched against every element of the input array.
+    JsonDocument filter;
+    filter["results"][0]["name"] = true;
+    filter["results"][0]["type"]["name"] = true;
+    filter["results"][0]["agency"]["country_code"] = true;
+    filter["results"][0]["agency"]["name"] = true;
 
     JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, payload);
+    DeserializationError err = deserializeJson(
+        doc, payload,
+        DeserializationOption::Filter(filter)
+    );
+
     if (err) {
         Serial.printf("[API] JSON parse error: %s\n", err.c_str());
         return false;
     }
 
-    crew.count = doc["number"] | 0;
-    JsonArray people = doc["people"];
-    int i = 0;
-    for (JsonObject p : people) {
-        if (i >= 20) break;
-        crew.names[i] = p["name"].as<String>();
-        crew.crafts[i] = p["craft"].as<String>();
-        i++;
+    JsonArray results = doc["results"].as<JsonArray>();
+    Serial.printf("[API] TSD returned %d results\n", (int)results.size());
+
+    int kept = 0;
+    for (JsonObject p : results) {
+        if (kept >= 20) break;
+        const char* typeName = p["type"]["name"] | "";
+        // Skip placeholder entries (e.g. "Starman" — type.name == "Non-Human").
+        if (strcmp(typeName, "Non-Human") == 0) continue;
+
+        const char* country = p["agency"]["country_code"] | "";
+        crew.names[kept] = p["name"].as<String>();
+        crew.crafts[kept] = (strcmp(country, "CHN") == 0) ? "Tiangong" : "ISS";
+        kept++;
     }
+
+    if (kept == 0) {
+        Serial.println("[API] Crew: filter produced 0 entries — keeping previous data");
+        return false;
+    }
+
+    crew.count = kept;
     crew.valid = true;
     crew.lastFetch = millis();
 

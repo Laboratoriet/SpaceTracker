@@ -335,8 +335,9 @@ void loop() {
         dirty = true;
     }
 
-    // Periodic crew refresh — aggressive retry until first success
-    unsigned long crewInterval = crew.valid ? ASTROS_REFRESH_MS : 30UL * 1000;
+    // Periodic crew refresh. TSD's free tier is 15 req/hour, so even on
+    // first-boot retries we cap at one attempt per 5 min.
+    unsigned long crewInterval = crew.valid ? ASTROS_REFRESH_MS : 5UL * 60 * 1000;
     if (wifiConnected && startupPhase == STARTUP_COMPLETE &&
         (now - lastAstrosFetch > crewInterval)) {
         Serial.println("Refreshing crew...");

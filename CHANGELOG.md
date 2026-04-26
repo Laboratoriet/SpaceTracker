@@ -2,6 +2,46 @@
 
 All notable changes to SpaceTracker will be documented in this file.
 
+## [1.0.4] — 2026-04-26
+
+### Changed
+- Crew data source switched from Open Notify
+  (`api.open-notify.org/astros.json`) to The Space Devs Launch Library 2
+  (`ll.thespacedevs.com/2.2.0/astronaut/?in_space=true`). Open Notify
+  had been running roughly a year out of date — it was missing
+  Tiangong's most recent crew rotation and still listed an Artemis II
+  flight that already returned to Earth. The Space Devs is actively
+  maintained, distinguishes Chinese crews from US/Russian crews
+  (so the globe view still groups people by craft correctly), and
+  filters out the "Starman" placeholder entry.
+- Crew refresh interval bumped from 5 min to 15 min, and the first-boot
+  retry interval from 30 s to 5 min, to stay comfortably under TSD's
+  free-tier cap of 15 requests per hour.
+- Crew JSON is now read into a `String` before parsing instead of
+  streaming directly into ArduinoJson. Streaming over chunked HTTPS
+  was occasionally failing silently (same TLS-framing class of bug
+  that gave us the `start_ssl_client: -1` errors a while back). The
+  ~25 KB payload is trivial against the 8 MB PSRAM budget.
+- Crew parser uses ArduinoJson's filter feature (`filter[key][0]`
+  array-template pattern) so only the four fields we actually use
+  (`name`, `type.name`, `agency.country_code`, `agency.name`) get
+  allocated from the ~25 KB response.
+
+### Fixed
+- Daylight tracker text became unreadable during civil twilight
+  (sun altitude roughly -2° to -6°). The previous gradient interpolated
+  text and bg colors that lived in the same hue family — purple-on-purple
+  and blue-on-blue — and RGB565 quantization made the muddy middle of
+  the interpolation effectively invisible.
+  Fix: every twilight stop now uses extreme luminance for the text
+  (near-black on light bgs, near-white on dark bgs) regardless of hue,
+  and the polarity flip is compressed into a single 1° altitude window
+  (-3° → -4°) so the muddy transition only lasts ~4 minutes of real
+  time instead of being smeared across 15+ minutes.
+- Crew fetcher used to overwrite cached data with `count=0` when the
+  parser produced no usable entries. It now leaves the previous good
+  data on screen instead of flashing "0 humans in space".
+
 ## [1.0.3] — 2026-04-26
 
 ### Fixed

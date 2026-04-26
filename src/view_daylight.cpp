@@ -41,11 +41,22 @@ struct ColorStop { float altDeg; uint32_t bg; uint32_t text; };
 // PEACHIER as the sun descends. The previous version had identical morning
 // and evening colors at the same altitude, which made the daytime palette
 // feel static. These differ noticeably at every shared altitude.
+// During twilight the bg and text used to trend toward the same hue family,
+// which (combined with RGB565 quantization) made text nearly invisible at
+// dusk/dawn. To guarantee readability across the whole transition:
+//   - keep DARK text on every LIGHT bg (sunset → afterglow, ~+45° to -3°)
+//   - SNAP-FLIP to LIGHT text once the bg is genuinely dark enough that a
+//     near-black text would also be invisible (~-3° → -4°)
+//   - keep LIGHT text on every DARK bg (-4° all the way to night)
+// The flip happens within a single 1° slice so the muddy interpolation zone
+// only lasts ~4 minutes of real time, not the 15+ minutes we had before.
 static const ColorStop STOPS_MORNING[] = {
     { -25.0f, RGB(0x06,0x13,0x1F), RGB(0x90,0xCF,0xEF) },
-    { -12.0f, RGB(0x0F,0x1E,0x36), RGB(0x7A,0xA8,0xD0) },
-    {  -6.0f, RGB(0x3D,0x5C,0x8C), RGB(0xC5,0xD5,0xEE) },
-    {  -2.0f, RGB(0x9D,0xB8,0xDC), RGB(0x50,0x65,0x90) },
+    { -12.0f, RGB(0x0F,0x1E,0x36), RGB(0xC5,0xD5,0xEE) }, // brighter text
+    {  -6.0f, RGB(0x2C,0x44,0x6C), RGB(0xE8,0xEF,0xFC) }, // dark bg, near-white text
+    {  -4.0f, RGB(0x4A,0x60,0x88), RGB(0xF2,0xF4,0xFC) }, // post-flip, light text
+    {  -3.0f, RGB(0x80,0x9C,0xC4), RGB(0x05,0x06,0x10) }, // pre-flip, near-black text
+    {  -2.0f, RGB(0x9D,0xB8,0xDC), RGB(0x05,0x06,0x10) }, // pre-dawn, near-black text
     {   0.0f, RGB(0xFD,0xED,0xA8), RGB(0xDB,0x60,0x28) }, // bright sunrise yellow
     {   4.0f, RGB(0xFD,0xE6,0x9C), RGB(0xC4,0x52,0x30) }, // golden hour
     {  12.0f, RGB(0xFC,0xDF,0x95), RGB(0xA0,0x4C,0x2C) }, // mid-morning gold
@@ -58,9 +69,11 @@ static const ColorStop STOPS_EVENING[] = {
     {  12.0f, RGB(0xF8,0xC5,0xA0), RGB(0xA0,0x4C,0x2C) }, // late afternoon, soft peach
     {   4.0f, RGB(0xF6,0xB5,0x95), RGB(0xA0,0x4C,0x2C) }, // approaching golden
     {   0.0f, RGB(0xF7,0xC5,0xB1), RGB(0xA0,0x4C,0x2C) }, // sunset peach
-    {  -2.0f, RGB(0xB5,0x9C,0xB0), RGB(0x5A,0x46,0x70) }, // afterglow
-    {  -6.0f, RGB(0x5C,0x7A,0xA8), RGB(0xD3,0xE5,0xFD) }, // civil dusk
-    { -12.0f, RGB(0x1F,0x2D,0x4D), RGB(0x95,0xB5,0xD9) }, // nautical dusk
+    {  -2.0f, RGB(0xB5,0x9C,0xB0), RGB(0x05,0x04,0x0E) }, // afterglow, near-black text
+    {  -3.0f, RGB(0x90,0x80,0x9C), RGB(0x05,0x04,0x0E) }, // pre-flip, dark text on muted bg
+    {  -4.0f, RGB(0x55,0x5E,0x82), RGB(0xF4,0xF0,0xF6) }, // post-flip, light text on dark
+    {  -6.0f, RGB(0x2E,0x42,0x6A), RGB(0xE8,0xEF,0xFC) }, // civil dusk, near-white text
+    { -12.0f, RGB(0x1F,0x2D,0x4D), RGB(0xC5,0xD5,0xEE) }, // nautical dusk, brighter text
     { -25.0f, RGB(0x06,0x13,0x1F), RGB(0x90,0xCF,0xEF) }, // night
 };
 

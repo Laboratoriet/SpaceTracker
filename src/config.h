@@ -11,7 +11,10 @@
 #define DISP_H 240
 
 // ── API endpoints ──
-#define ASTROS_URL       "http://api.open-notify.org/astros.json"
+// The Space Devs Launch Library 2 — actively maintained (Open Notify often
+// runs months out of date and missed Tiangong + recent crew rotations).
+// Free tier: 15 req/hour, comfortably above our refresh rate.
+#define ASTROS_URL       "https://ll.thespacedevs.com/2.2.0/astronaut/?in_space=true&limit=50"
 #define TLE_ISS_URL      "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 #define TLE_TIANGONG_URL "https://celestrak.org/NORAD/elements/gp.php?CATNR=48274&FORMAT=TLE"
 
@@ -24,7 +27,7 @@
 #define NTP_DST_OFFSET   3600       // +1h DST
 
 // ── Timing (ms) ──
-#define ASTROS_REFRESH_MS    (5UL * 60 * 1000)     // 5 minutes
+#define ASTROS_REFRESH_MS    (15UL * 60 * 1000)    // 15 min — stay polite to TSD's 15 req/hour cap
 #define TLE_REFRESH_MS       (6UL * 60 * 60 * 1000) // 6 hours
 #define ORBIT_UPDATE_MS      (60UL * 1000)           // 60 seconds — slow enough to avoid visible refresh blink
 #define WIFI_RETRY_MS        (30UL * 1000)
