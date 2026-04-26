@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SpaceTracker — view previews</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!--
+  U8g2 fonts used by the device:
+    inb24 / inr16 / inb19  → Inter Bold 24 / Regular 16 / Bold 19
+    helvR10                → Helvetica Regular 10
+    logisoso92_tn          → numeric display font; closest Google Font is a chunky display weight
+
+  Inter loaded directly. Logisoso has no exact web equivalent — using Inter Black for a
+  faithful look at large display sizes (matches the type system).
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<style>
+  :root {
+    --page-bg: #ffffff;
+    --ink: #111;
+    --dim: #888;
+    --rule: #e5e5e5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--page-bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+  body { padding: 40px; min-height: 100vh; }
+  h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 32px; }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    max-width: 600px;
+  }
+  .frame-row { }
+  .frame-row h2 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .frame-row .meta {
+    font-size: 12px;
+    color: var(--dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    margin-bottom: 12px;
+  }
+
+  /* Frame is EXACTLY 536x240 — the canvas IS the screen */
+  .frame {
+    width: 536px;
+    height: 240px;
+    display: block;
+    /* hairline outline so the black screen reads against the white page */
+    outline: 1px solid var(--rule);
+  }
+
+  .controls {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button:hover { background: #f5f5f5; }
+  button.active { background: #111; color: #fff; border-color: #111; }
+
+  .legend {
+    margin-top: 14px;
+    display: flex;
+    gap: 18px;
+    color: var(--dim);
+    font-size: 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .legend span::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .legend .iss::before { background: #00ffff; }
+  .legend .css::before { background: #ffbe00; }
+
+  /* Device controls — simulate long-press toggles */
+  .device-controls {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 18px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    max-width: 600px;
+  }
+  .device-controls .label {
+    font-size: 11px;
+    color: var(--dim);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 4px;
+  }
+  .led-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #19e266;
+    box-shadow: 0 0 10px #19e26688;
+    transition: all 0.15s;
+  }
+  .led-dot.off { background: #1a1a1a; box-shadow: none; }
+  .frame.dim-low { filter: brightness(0.35); }
+  .frame.dim-mid { filter: brightness(0.65); }
+</style>
+</head>
+<body>
+  <h1>SpaceTracker — view previews</h1>
+  <div class="sub">All frames rendered at exactly 536×240 (native AMOLED resolution).</div>
+
+  <div class="device-controls">
+    <span class="label">Long-press sim:</span>
+    <button id="led-toggle" class="active">Green LED <span class="led-dot" id="led-dot"></span></button>
+    <button id="starfield-toggle" class="active">Starfield ON</button>
+    <button id="legend-toggle" class="active">Legends ON</button>
+    <button id="brightness-cycle" class="active">Brightness HIGH</button>
+  </div>
+
+  <div class="stack">
+    <div class="frame-row">
+      <h2>1 · Crew count</h2>
+      <div class="meta">view_crew.cpp · <span id="live-status">fetching…</span></div>
+      <canvas id="cv-crew" class="frame" width="536" height="240"></canvas>
+      <div class="controls">
+        <button data-count="live" class="active">Live</button>
+        <button data-count="0">Loading state</button>
+        <button data-count="7">7</button>
+        <button data-count="13">13</button>
+        <button data-count="17">17 (stress)</button>
+      </div>
+    </div>
+
+    <div class="frame-row">
+      <h2>2 · Crew names</h2>
+      <div class="meta">view_names.cpp</div>
+      <canvas id="cv-names" class="frame" width="536" height="240"></canvas>
+      <div class="controls">
+        <button data-scenario="live" class="active">Live</button>
+        <button data-scenario="empty">No data</button>
+        <button data-scenario="iss-only">ISS only (mock)</button>
+        <button data-scenario="full">17 (stress)</button>
+      </div>
+    </div>
+
+    <div class="frame-row">
+      <h2>3 · Orbit diagram</h2>
+      <div class="meta">view_orbit.cpp · <span id="orbit-status">fetching TLEs…</span></div>
+      <canvas id="cv-orbit" class="frame" width="536" height="240"></canvas>
+      <div class="controls">
+        <button id="orbit-mode-live" class="active">Live (real-time)</button>
+        <button id="orbit-mode-fast">Fast-forward (×500)</button>
+        <button id="orbit-mode-mock">Mock motion</button>
+      </div>
+      <div class="legend">
+        <span class="iss">ISS — 51.6°, ~408 km</span>
+        <span class="css">CSS — 41.5°, ~380 km</span>
+      </div>
+    </div>
+
+    <div class="frame-row">
+      <h2>4 · Clock — screensaver</h2>
+      <div class="meta">view_clock.cpp · large 24h time, date subtitle, starfield bg</div>
+      <canvas id="cv-clock" class="frame" width="536" height="240"></canvas>
+    </div>
+
+    <div class="frame-row">
+      <h2>5 · Clock — minimal</h2>
+      <div class="meta">view_clock.cpp · same as above, starfield off</div>
+      <canvas id="cv-clock-plain" class="frame" width="536" height="240"></canvas>
+    </div>
+
+    <div class="frame-row">
+      <h2>6 · Daylight tracker</h2>
+      <div class="meta">view_daylight.cpp · sun arc · phase-tinted bg · inspired by <a href="https://github.com/bakkenbaeck/daylight-ios" style="color:inherit">bakkenbaeck/daylight-ios</a> · location: Oslo</div>
+      <canvas id="cv-daylight" class="frame" width="536" height="240"></canvas>
+      <div class="controls">
+        <button data-day="now" class="active">Now</button>
+        <button data-day="spring">Spring equinox</button>
+        <button data-day="summer">Summer solstice (long day)</button>
+        <button data-day="autumn">Autumn equinox</button>
+        <button data-day="winter">Winter solstice (short day)</button>
+        <button data-day="midnight">Now (midnight)</button>
+      </div>
+    </div>
+
+    <div class="frame-row">
+      <h2>3b · Orbit sketch — Oslo</h2>
+      <div class="meta">design exploration · country outlines inside Earth, Oslo marked, comet-trail orbits</div>
+      <canvas id="cv-orbit-sketch" class="frame" width="536" height="240"></canvas>
+      <div class="legend">
+        <span style="color:#fff">● Oslo</span>
+        <span class="iss">● ISS</span>
+        <span class="css">● CSS</span>
+      </div>
+    </div>
+
+    <div class="frame-row">
+      <h2>3c · Orbit sketch — Warsaw</h2>
+      <div class="meta">same as 3b, projection centered on Warsaw · for Natalia 🇵🇱</div>
+      <canvas id="cv-orbit-sketch-warsaw" class="frame" width="536" height="240"></canvas>
+      <div class="legend">
+        <span style="color:#fff">● Warsaw</span>
+        <span class="iss">● ISS</span>
+        <span class="css">● CSS</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ── RGB565 → CSS color ────────────────────────────────────────────────────────
+function rgb565(c) {
+  const r = ((c >> 11) & 0x1f) * 255 / 31;
+  const g = ((c >> 5)  & 0x3f) * 255 / 63;
+  const b = (c & 0x1f) * 255 / 31;
+  return `rgb(${r|0}, ${g|0}, ${b|0})`;
+}
+
+// Color palette — mirrors device config.h
+const COL_ISS_565 = 0x07FF;   // bright cyan
+const COL_ISS_TRACK_565 = 0x0314;
+const COL_CSS_565 = 0xFBE0;   // bright amber
+const COL_CSS_TRACK_565 = 0x8B20;
+
+const COL = {
+  BG:           rgb565(0x0000),
+  ISS_DOT:      rgb565(COL_ISS_565),
+  ISS_TRACK:    rgb565(COL_ISS_TRACK_565),
+  CSS_DOT:      rgb565(COL_CSS_565),
+  CSS_TRACK:    rgb565(COL_CSS_TRACK_565),
+  TEXT_BRIGHT:  rgb565(0xE73C),
+  TEXT_DIM:     rgb565(0x7BEF),
+  TEXT_DARK:    rgb565(0x4208),
+  WIFI_OK:      rgb565(0x07E0),
+  WIFI_ERR:     rgb565(0xF800),
+  STALE:        rgb565(0xFD20),
+  EARTH_FILL:   rgb565(0x1928),
+};
+
+const W = 536, H = 240;
+
+// ── Canvas helpers ────────────────────────────────────────────────────────────
+function fill(ctx, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, W, H);
+}
+function circle(ctx, x, y, r, color, fill = true) {
+  ctx.beginPath();
+  ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
+  if (fill) { ctx.fillStyle = color; ctx.fill(); }
+  else { ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function line(ctx, x1, y1, x2, y2, color, w = 1) {
+  ctx.beginPath();
+  ctx.moveTo(x1 + 0.5, y1 + 0.5);
+  ctx.lineTo(x2 + 0.5, y2 + 0.5);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.stroke();
+}
+
+// U8g2 + Arduino_GFX uses BASELINE-anchored text
+function setText(ctx, font, color) {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'alphabetic';
+}
+function textWidth(ctx, str) { return ctx.measureText(str).width; }
+function drawCentered(ctx, y, str, color, font) {
+  setText(ctx, font, color);
+  const w = textWidth(ctx, str);
+  ctx.fillText(str, (W - w) / 2, y);
+}
+
+// ── Font definitions — match U8g2 pixel sizes exactly ────────────────────────
+const FONT = {
+  BIG_NUM:   '900 92px Inter, sans-serif',           // logisoso92_tn → Inter Black
+  TITLE:     '700 24px Inter, sans-serif',           // inb24_mr
+  SUBTITLE:  '400 16px Inter, sans-serif',           // inr16_mr
+  HEADER:    '700 19px Inter, sans-serif',           // inb19_mr
+  BODY:      '400 16px Inter, sans-serif',           // inr16_mr
+  SMALL:     '400 16px Inter, sans-serif',           // inr16_mr
+  TINY:      '400 11px Helvetica, "Helvetica Neue", Arial, sans-serif', // helvR10_tr
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIEW 1 — Crew count
+// ─────────────────────────────────────────────────────────────────────────────
+function renderCrewCount(ctx, count, wifi = true, stale = false) {
+  fill(ctx, COL.BG);
+
+  if (count <= 0) {
+    drawCentered(ctx, 130, 'Fetching data...', COL.TEXT_DIM, FONT.SUBTITLE);
+    return;
+  }
+
+  const numStr = String(count);
+  setText(ctx, FONT.BIG_NUM, COL.TEXT_BRIGHT);
+  const tw = textWidth(ctx, numStr);
+  const th = 92;
+  const blockH = th + 30 + 16;
+  const startY = (H - blockH) / 2 + th;
+
+  ctx.fillText(numStr, (W - tw) / 2, startY);
+
+  drawCentered(ctx, startY + 40, 'humans in space right now', COL.TEXT_DIM, FONT.SUBTITLE);
+
+  if (!wifi)  circle(ctx, W - 8,  6, 3, COL.WIFI_ERR);
+  if (stale)  circle(ctx, W - 18, 6, 3, COL.STALE);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIEW 2 — Crew names
+// ─────────────────────────────────────────────────────────────────────────────
+function renderCrewNames(ctx, crew) {
+  fill(ctx, COL.BG);
+
+  if (!crew || crew.count === 0) {
+    drawCentered(ctx, 130, 'No data yet', COL.TEXT_DIM, FONT.SUBTITLE);
+    return;
+  }
+
+  const crafts = [];
+  for (let i = 0; i < crew.count; i++) {
+    if (!crafts.includes(crew.crafts[i])) crafts.push(crew.crafts[i]);
+  }
+
+  const colWidth = W / Math.max(crafts.length, 1);
+  const startY = 24;
+
+  crafts.forEach((craft, c) => {
+    const cx = 10 + c * colWidth;
+    let cy = startY;
+    const maxTextW = colWidth - 20;
+    const headerColor = c === 0 ? COL.ISS_DOT : COL.CSS_DOT;
+
+    setText(ctx, FONT.HEADER, headerColor);
+    ctx.fillText(craft, cx, cy);
+    cy += 28;
+
+    setText(ctx, FONT.BODY, COL.TEXT_BRIGHT);
+    for (let i = 0; i < crew.count; i++) {
+      if (crew.crafts[i] !== craft) continue;
+      if (cy > H - 8) break;
+
+      let name = crew.names[i];
+      while (textWidth(ctx, name) > maxTextW && name.length > 3) {
+        name = name.slice(0, -1);
+      }
+      ctx.fillStyle = COL.TEXT_BRIGHT;
+      ctx.fillText(name, cx, cy);
+      cy += 22;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VIEW 3 — Orbit diagram
+// ─────────────────────────────────────────────────────────────────────────────
+const EARTH_R = 35, EARTH_CX = W / 2, EARTH_CY = (H - 22) / 2;
+const STATUS_Y = H - 20;
+const ISS_R = 90, CSS_R = 75;
+
+function orbitPoint(cx, cy, r, incDeg, angDeg) {
+  const inc = incDeg * Math.PI / 180;
+  const ang = angDeg * Math.PI / 180;
+  return {
+    x: cx + r * Math.cos(ang),
+    y: cy + r * Math.sin(ang) * Math.cos(inc),
+  };
+}
+
+function isBehindEarth(cx, cy, r, incDeg, angDeg, earthR = EARTH_R) {
+  const ang = angDeg * Math.PI / 180;
+  if (Math.sin(ang) <= 0.2) return false;
+  const p = orbitPoint(cx, cy, r, incDeg, angDeg);
+  return Math.abs(p.x - cx) < earthR + 2 && Math.abs(p.y - cy) < earthR + 2;
+}
+
+function dimColor(c) {
+  let d = (c >> 1) & 0x7BEF;
+  d = (d >> 1) & 0x7BEF;
+  return rgb565(d);
+}
+
+function drawOrbitRing(ctx, cx, cy, r, incDeg, color565, earthR = EARTH_R) {
+  const baseColor = rgb565(color565);
+  const dim = dimColor(color565);
+  for (let off = -1; off <= 1; off++) {
+    const rr = r + off;
+    let prev = null;
+    for (let deg = 0; deg <= 360; deg += 2) {
+      const p = orbitPoint(cx, cy, rr, incDeg, deg);
+      if (prev) {
+        const behind = isBehindEarth(cx, cy, r, incDeg, deg, earthR);
+        line(ctx, prev.x, prev.y, p.x, p.y, behind ? dim : baseColor, 1);
+      }
+      prev = p;
+    }
+  }
+}
+
+function drawSatDot(ctx, cx, cy, r, incDeg, angDeg, dotColor565) {
+  const p = orbitPoint(cx, cy, r, incDeg, angDeg);
+  const glow = rgb565(dotColor565 & 0x39E7);
+  circle(ctx, p.x, p.y, 8, glow);
+  circle(ctx, p.x, p.y, 6, rgb565(dotColor565));
+  circle(ctx, p.x, p.y, 3, COL.TEXT_BRIGHT);
+}
+
+function drawEarth(ctx) {
+  circle(ctx, EARTH_CX, EARTH_CY, EARTH_R, COL.EARTH_FILL);
+  circle(ctx, EARTH_CX, EARTH_CY, EARTH_R,     COL.TEXT_BRIGHT, false);
+  circle(ctx, EARTH_CX, EARTH_CY, EARTH_R + 1, COL.TEXT_BRIGHT, false);
+}
+
+function renderOrbit(ctx, iss, css, wifi = true) {
+  fill(ctx, COL.BG);
+  drawEarth(ctx);
+
+  drawOrbitRing(ctx, EARTH_CX, EARTH_CY, ISS_R, 51.6, COL_ISS_TRACK_565);
+  drawOrbitRing(ctx, EARTH_CX, EARTH_CY, CSS_R, 41.5, COL_CSS_TRACK_565);
+
+  if (iss.valid) {
+    const ang = ((iss.lon + 180) % 360 + 360) % 360;
+    drawSatDot(ctx, EARTH_CX, EARTH_CY, ISS_R, 51.6, ang, COL_ISS_565);
+  }
+  if (css.valid) {
+    const ang = ((css.lon + 180) % 360 + 360) % 360;
+    drawSatDot(ctx, EARTH_CX, EARTH_CY, CSS_R, 41.5, ang, COL_CSS_565);
+  }
+
+  // Status bar (toggleable) — colored dot before each label
+  if (legendsEnabled) {
+    if (iss.valid) {
+      setText(ctx, FONT.TINY, COL.ISS_DOT);
+      circle(ctx, 7, STATUS_Y + 6, 3, COL.ISS_DOT);
+      const buf = `ISS  ${Math.abs(iss.lat).toFixed(1)}${iss.lat>=0?'N':'S'} ${Math.abs(iss.lon).toFixed(1)}${iss.lon>=0?'E':'W'}  ${iss.alt|0}km`;
+      ctx.fillText(buf, 16, STATUS_Y + 10);
+    }
+    if (css.valid) {
+      setText(ctx, FONT.TINY, COL.CSS_DOT);
+      circle(ctx, W / 2 + 3, STATUS_Y + 6, 3, COL.CSS_DOT);
+      const buf = `CSS  ${Math.abs(css.lat).toFixed(1)}${css.lat>=0?'N':'S'} ${Math.abs(css.lon).toFixed(1)}${css.lon>=0?'E':'W'}  ${css.alt|0}km`;
+      ctx.fillText(buf, W / 2 + 12, STATUS_Y + 10);
+    }
+  }
+
+  if (!wifi) circle(ctx, W - 8, 6, 3, COL.WIFI_ERR);
+}
+
+// ── Mock data + live fetch ────────────────────────────────────────────────────
+const MOCK_CREW = {
+  empty: { count: 0, names: [], crafts: [] },
+  'iss-only': {
+    count: 7,
+    names: ['Oleg Kononenko', 'Nikolai Chub', 'Tracy Dyson', 'Matthew Dominick', 'Michael Barratt', 'Jeanette Epps', 'Alexander Grebenkin'],
+    crafts: ['ISS','ISS','ISS','ISS','ISS','ISS','ISS'],
+  },
+  full: {
+    count: 17,
+    names: [
+      'Oleg Kononenko','Nikolai Chub','Tracy Dyson','Matthew Dominick','Michael Barratt','Jeanette Epps','Alexander Grebenkin','Sunita Williams','Butch Wilmore','Don Pettit','Alexey Ovchinin','Ivan Vagner',
+      'Li Cong','Li Guangsu','Ye Guangfu','Cai Xuzhe','Song Lingdong'
+    ],
+    crafts: [
+      'ISS','ISS','ISS','ISS','ISS','ISS','ISS','ISS','ISS','ISS','ISS','ISS',
+      'Tiangong','Tiangong','Tiangong','Tiangong','Tiangong'
+    ],
+  },
+  live: { count: 0, names: [], crafts: [] }, // populated by fetchLive()
+};
+
+async function fetchLive() {
+  const status = document.getElementById('live-status');
+  try {
+    // Proxied through serve.py to dodge HTTP-blocking in modern browsers
+    const res = await fetch('/crew');
+    const data = await res.json();
+    MOCK_CREW.live = {
+      count: data.number,
+      names: data.people.map(p => p.name),
+      crafts: data.people.map(p => p.craft),
+    };
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    status.textContent = `live: ${data.number} crew · fetched ${t}`;
+    return true;
+  } catch (e) {
+    status.textContent = `live fetch failed: ${e.message}`;
+    return false;
+  }
+}
+
+// ── Boot — wait for fonts before first render ────────────────────────────────
+const ctxCrew  = document.getElementById('cv-crew').getContext('2d');
+const ctxNames = document.getElementById('cv-names').getContext('2d');
+const ctxOrbit = document.getElementById('cv-orbit').getContext('2d');
+
+let crewCountKey = 'live';
+let crewScenario = 'live';
+let orbitMode = 'live';   // 'live' | 'fast' | 'mock'
+let orbitT = 0;            // mock-mode counter
+let fastT0 = null;         // wallclock anchor for fast-forward mode
+let satrecs = { iss: null, css: null }; // from satellite.js
+
+function setCrewCount(key) {
+  crewCountKey = key;
+  const n = key === 'live' ? MOCK_CREW.live.count : Number(key);
+  renderCrewCount(ctxCrew, n);
+}
+function setCrewScenario(k) { crewScenario = k; renderCrewNames(ctxNames, MOCK_CREW[k]); }
+
+document.querySelectorAll('[data-count]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-count]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setCrewCount(btn.dataset.count);
+  });
+});
+document.querySelectorAll('[data-scenario]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-scenario]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setCrewScenario(btn.dataset.scenario);
+  });
+});
+function setOrbitMode(mode) {
+  orbitMode = mode;
+  fastT0 = null;
+  ['live','fast','mock'].forEach(m => {
+    document.getElementById('orbit-mode-' + m).classList.toggle('active', m === mode);
+  });
+}
+document.getElementById('orbit-mode-live').addEventListener('click', () => setOrbitMode('live'));
+document.getElementById('orbit-mode-fast').addEventListener('click', () => setOrbitMode('fast'));
+document.getElementById('orbit-mode-mock').addEventListener('click', () => setOrbitMode('mock'));
+
+// Parse "NAME\n1 ...\n2 ..." into a satellite.js satrec
+function parseTLE(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 3) return null;
+  return satellite.twoline2satrec(lines[1], lines[2]);
+}
+
+async function fetchTLEs() {
+  const status = document.getElementById('orbit-status');
+  try {
+    const [issTxt, cssTxt] = await Promise.all([
+      fetch('/tle/iss').then(r => r.text()),
+      fetch('/tle/css').then(r => r.text()),
+    ]);
+    satrecs.iss = parseTLE(issTxt);
+    satrecs.css = parseTLE(cssTxt);
+    if (!satrecs.iss || !satrecs.css) throw new Error('TLE parse failed');
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    status.textContent = `live TLEs · fetched ${t}`;
+    return true;
+  } catch (e) {
+    status.textContent = `TLE fetch failed: ${e.message} (using mock motion)`;
+    setOrbitMode('mock');
+    return false;
+  }
+}
+
+// Compute satellite lat/lon/alt at a given Date using SGP4
+function propagate(satrec, date) {
+  if (!satrec) return { valid: false };
+  const pv = satellite.propagate(satrec, date);
+  if (!pv.position) return { valid: false };
+  const gmst = satellite.gstime(date);
+  const geo = satellite.eciToGeodetic(pv.position, gmst);
+  return {
+    lat: satellite.degreesLat(geo.latitude),
+    lon: satellite.degreesLong(geo.longitude),
+    alt: geo.height,  // km
+    valid: true,
+  };
+}
+
+function mockPositions(t) {
+  return {
+    iss: { lat: 51 * Math.sin(t * 0.04),       lon: ((t * 1.3 + 30)  % 360) - 180, alt: 408, valid: true },
+    css: { lat: 41 * Math.sin(t * 0.04 + 1.2), lon: ((t * 1.4 + 200) % 360) - 180, alt: 380, valid: true },
+  };
+}
+
+function tickOrbit() {
+  let iss, css;
+
+  if (orbitMode === 'mock' || (!satrecs.iss && !satrecs.css)) {
+    orbitT += 0.5;
+    ({ iss, css } = mockPositions(orbitT));
+  } else if (orbitMode === 'fast') {
+    // Fast-forward: 1 real second = 500 simulated seconds
+    if (fastT0 === null) fastT0 = { wall: Date.now(), sim: Date.now() };
+    const elapsed = Date.now() - fastT0.wall;
+    const simNow = new Date(fastT0.sim + elapsed * 500);
+    iss = propagate(satrecs.iss, simNow);
+    css = propagate(satrecs.css, simNow);
+  } else {
+    // live: propagate at real wallclock time
+    const now = new Date();
+    iss = propagate(satrecs.iss, now);
+    css = propagate(satrecs.css, now);
+  }
+
+  renderOrbit(ctxOrbit, iss, css, true);
+  requestAnimationFrame(tickOrbit);
+}
+
+// Wait for fonts + live crew + TLEs + countries before first render
+Promise.all([document.fonts.ready, fetchLive(), fetchTLEs(), loadCountries()]).then(() => {
+  setCrewCount(crewCountKey);
+  setCrewScenario(crewScenario);
+  tickOrbit();
+  tickSketch();
+  tickClock();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4 · CLOCK — screensaver with starfield
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Pre-generate a deterministic starfield so stars don't flicker between frames
+const STARS = [];
+(function genStars() {
+  // Tiny seeded RNG so stars look the same every page load
+  let seed = 7919;
+  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+  // Three brightness tiers — most are faded, a few bright
+  const tiers = [
+    { count: 90, alpha: 0.18, size: 1 },  // very faint background
+    { count: 45, alpha: 0.45, size: 1 },  // mid
+    { count: 18, alpha: 0.85, size: 1 },  // bright
+    { count: 6,  alpha: 1.00, size: 2 },  // hero stars (rare, 2px)
+  ];
+
+  for (const t of tiers) {
+    for (let i = 0; i < t.count; i++) {
+      STARS.push({
+        x: Math.floor(rng() * W),
+        y: Math.floor(rng() * H),
+        a: t.alpha,
+        s: t.size,
+      });
+    }
+  }
+})();
+
+function renderClock(ctx, { stars = true } = {}) {
+  fill(ctx, COL.BG);
+
+  if (stars) {
+    for (const star of STARS) {
+      ctx.fillStyle = `rgba(255,255,255,${star.a})`;
+      ctx.fillRect(star.x, star.y, star.s, star.s);
+    }
+  }
+
+  // Time — same anatomy as crew count (big number block, dim subtitle)
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const timeStr = `${hh}:${mm}`;
+
+  setText(ctx, FONT.BIG_NUM, COL.TEXT_BRIGHT);
+  const tw = textWidth(ctx, timeStr);
+  const th = 92;
+  const blockH = th + 30 + 16;
+  const startY = (H - blockH) / 2 + th;
+  ctx.fillText(timeStr, (W - tw) / 2, startY);
+
+  // Date subtitle
+  const date = now.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  drawCentered(ctx, startY + 40, date, COL.TEXT_DIM, FONT.SUBTITLE);
+}
+
+const ctxClock      = document.getElementById('cv-clock').getContext('2d');
+const ctxClockPlain = document.getElementById('cv-clock-plain').getContext('2d');
+const ctxDaylight   = document.getElementById('cv-daylight').getContext('2d');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6 · DAYLIGHT TRACKER — phase-tinted, inspired by bakkenbaeck/daylight-ios
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Direct lift from daylight-ios Theme.swift — these are the 5 anchor phases
+const DAYLIGHT_THEME = {
+  sunrise:  { bg: '#FDEDA8', text: '#DB6028' },
+  daylight: { bg: '#FADDA4', text: '#A04C2C' },
+  sunset:   { bg: '#F7C5B1', text: '#A04C2C' },
+  twilight: { bg: '#D3E5FD', text: '#40589B' },
+  night:    { bg: '#06131F', text: '#90CFEF' },
+};
+
+// Continuous gradient palette — interpolates between sub-phase color stops
+// based on the sun's actual altitude. Morning and evening are mirrored but
+// distinct so the warm phases pull yellow on the way up and peach on the way
+// down, the way real sky does. Stops are [altitudeDeg, bg, text].
+const DAYLIGHT_STOPS_MORNING = [
+  [-25, '#06131F', '#90CFEF'],  // deep night
+  [-12, '#0F1E36', '#7AA8D0'],  // astronomical
+  [-6,  '#3D5C8C', '#C5D5EE'],  // nautical → civil dawn
+  [-2,  '#9DB8DC', '#506590'],  // late civil dawn (pale)
+  [ 0,  '#FDEDA8', '#DB6028'],  // sunrise — yellow
+  [ 4,  '#FBE5AA', '#C45230'],  // golden morning
+  [12,  '#FBE0AA', '#A04C2C'],
+  [25,  '#FADDA4', '#9A4828'],
+  [45,  '#F8DEB6', '#8C3F1F'],  // bright midday
+];
+const DAYLIGHT_STOPS_EVENING = [
+  [45,  '#F8DEB6', '#8C3F1F'],
+  [25,  '#FADDA4', '#9A4828'],
+  [12,  '#F8D2A8', '#A04C2C'],
+  [ 4,  '#F6C5A2', '#A04C2C'],
+  [ 0,  '#F7C5B1', '#A04C2C'],  // sunset — peach
+  [-2,  '#B59CB0', '#5A4670'],  // afterglow purple
+  [-6,  '#5C7AA8', '#D3E5FD'],  // civil dusk
+  [-12, '#1F2D4D', '#95B5D9'],  // nautical dusk
+  [-25, '#06131F', '#90CFEF'],  // deep night
+];
+
+function lerpHex(a, b, t) {
+  const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16), bg = parseInt(b.slice(3, 5), 16), bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+function gradientColors(altDeg, isMorning) {
+  const stops = isMorning ? DAYLIGHT_STOPS_MORNING : DAYLIGHT_STOPS_EVENING;
+  // Walk consecutive pairs and find the bracket that contains altDeg
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a1 = stops[i][0], a2 = stops[i + 1][0];
+    const lo = Math.min(a1, a2), hi = Math.max(a1, a2);
+    if (altDeg >= lo && altDeg <= hi) {
+      const t = (altDeg - a1) / (a2 - a1);
+      return {
+        bg:   lerpHex(stops[i][1], stops[i + 1][1], t),
+        text: lerpHex(stops[i][2], stops[i + 1][2], t),
+      };
+    }
+  }
+  // Out of range — clamp to nearest end
+  const lowEnd  = stops.reduce((a, b) => a[0] < b[0] ? a : b);
+  const highEnd = stops.reduce((a, b) => a[0] > b[0] ? a : b);
+  const end = altDeg < lowEnd[0] ? lowEnd : highEnd;
+  return { bg: end[1], text: end[2] };
+}
+
+function dayPhase(now, t) {
+  if (now < t.dawn || now > t.dusk) return 'night';
+  if (now < t.sunrise) return 'twilight';
+  if (now < t.sunriseEnd) return 'sunrise';
+  if (now < t.goldenHour) return 'daylight';
+  if (now < t.sunset) return 'sunset';
+  return 'twilight';
+}
+
+function fmtDuration(ms) {
+  const totalSec = Math.round(Math.abs(ms) / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// Cuter: "5 more minutes", "1 fewer minute", "less than a minute"
+function fmtDeltaWords(deltaMs, isLonger) {
+  const totalSec = Math.round(Math.abs(deltaMs) / 1000);
+  if (totalSec < 30) return isLonger ? 'a touch more sun' : 'a touch less sun';
+  const min = Math.max(1, Math.round(totalSec / 60));
+  const word = min === 1 ? 'minute' : 'minutes';
+  return `${min} ${isLonger ? 'more' : 'fewer'} ${word}`;
+}
+
+function fmtHM(d) {
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Templates inspired by daylight-ios Message.swift, adapted so {d} is a
+// natural-language phrase like "5 more minutes" / "1 fewer minute".
+const DAYLIGHT_MESSAGES = {
+  day: {
+    longer: [
+      "**{d}** of daylight today. Make them count!",
+      "Today has **{d}** of sunshine. Enjoy!",
+      "Smile — today has **{d}** of daylight than yesterday.",
+      "Bring out your shorts, today has **{d}** of sunlight.",
+      "**{d}** of sun today. Soak it up!",
+    ],
+    shorter: [
+      "**{d}** of sun today. Keep your head up!",
+      "Sadly, today has **{d}** of sunlight. Make the most of it.",
+      "Today is a bit shorter — **{d}** of light than yesterday.",
+    ],
+  },
+  night: {
+    longer: [
+      "Get a good night’s sleep — **{d}** of sunlight tomorrow.",
+      "Bring out those pyjamas. **{d}** of light awaits tomorrow.",
+      "**{d}** of extra daylight awaits tomorrow.",
+    ],
+    shorter: [
+      "Tomorrow has **{d}** of sunlight than today. Make the most of it.",
+      "Brighter times ahead — but tomorrow has **{d}** of light first.",
+    ],
+  },
+};
+
+function pickDailyMessage(now, isDay, isLonger) {
+  const list = DAYLIGHT_MESSAGES[isDay ? 'day' : 'night'][isLonger ? 'longer' : 'shorter'];
+  // Stable per-day selection (FNV-ish hash of date string)
+  const key = now.toDateString();
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = (h ^ key.charCodeAt(i)) * 16777619 >>> 0;
+  return list[h % list.length];
+}
+
+function parseTemplate(template, duration) {
+  const filled = template.replace('{d}', duration);
+  return filled.split('**').map((t, i) => ({ text: t, bold: i % 2 === 1 })).filter(s => s.text);
+}
+
+function wrapSegments(ctx, segments, maxW, fontFor) {
+  const lines = [[]];
+  let lineW = 0;
+  for (const seg of segments) {
+    ctx.font = fontFor(seg.bold);
+    const tokens = seg.text.split(/(\s+)/).filter(t => t.length > 0);
+    for (const tok of tokens) {
+      const isSpace = /^\s+$/.test(tok);
+      const tokW = ctx.measureText(tok).width;
+      if (!isSpace && lineW + tokW > maxW && lineW > 0) {
+        lines.push([]);
+        lineW = 0;
+      }
+      if (isSpace && lineW === 0) continue;
+      lines[lines.length - 1].push({ text: tok, bold: seg.bold });
+      lineW += tokW;
+    }
+  }
+  return lines;
+}
+
+// Date override for testing different times of year (set by toggle buttons)
+let daylightDateOverride = null;
+
+function renderDaylight(ctx) {
+  const now  = daylightDateOverride || new Date();
+  const yest = new Date(now.getTime() - 86_400_000);
+  const tToday = SunCalc.getTimes(now,  OSLO.lat, OSLO.lng);
+  const tYest  = SunCalc.getTimes(yest, OSLO.lat, OSLO.lng);
+
+  // Continuous-gradient color palette: derive from the sun's actual altitude
+  // and whether we're before or after solar noon. Smoothly evolves all day.
+  const sunPos = SunCalc.getPosition(now, OSLO.lat, OSLO.lng);
+  const altDeg = sunPos.altitude * 180 / Math.PI;
+  const isMorning = now < tToday.solarNoon;
+  const theme = gradientColors(altDeg, isMorning);
+
+  // Full-bleed gradient-tinted background
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = theme.text;
+
+  // ── Horizon line + sun position ──
+  // Text off → horizon drops, arc gets the whole frame to play with.
+  const horizonY = legendsEnabled ? 110 : 185;
+  const lineX1 = 30;
+  const lineX2 = W - 30;
+
+  // Single thin horizontal line (no arc)
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = theme.text;
+  ctx.beginPath();
+  ctx.moveTo(lineX1, horizonY);
+  ctx.lineTo(lineX2, horizonY);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  const sunriseMs = tToday.sunrise.getTime();
+  const sunsetMs  = tToday.sunset.getTime();
+  const nowMs = now.getTime();
+  const isDay = nowMs >= sunriseMs && nowMs <= sunsetMs;
+
+  // Sun follows an invisible arc, peaking at the sun's actual midday altitude.
+  // In Oslo: ~7° in winter (flat arc) up to ~53° in summer (soaring arc).
+  // Peak height scales with both sun altitude AND available vertical space —
+  // text-off mode lets the arc reach much higher.
+  const noonPos = SunCalc.getPosition(tToday.solarNoon, OSLO.lat, OSLO.lng);
+  const noonAltDeg = Math.max(0, noonPos.altitude * 180 / Math.PI);
+  const peakMax = legendsEnabled ? 90 : 160;
+  const peakScale = legendsEnabled ? 1.5 : 2.7;
+  const PEAK_HEIGHT = Math.max(12, Math.min(peakMax, noonAltDeg * peakScale + 8));
+
+  let sx, sy;
+  if (isDay) {
+    const frac = (nowMs - sunriseMs) / (sunsetMs - sunriseMs);
+    sx = lineX1 + (lineX2 - lineX1) * frac;
+    sy = horizonY - Math.sin(Math.PI * frac) * PEAK_HEIGHT;
+  } else if (nowMs < sunriseMs) {
+    sx = lineX1;
+    sy = horizonY + 8;
+  } else {
+    sx = lineX2;
+    sy = horizonY + 8;
+  }
+
+  // Small filled circle (sun) — moves both horizontally and vertically
+  ctx.fillStyle = theme.text;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Current time floats just above the sun, tracking its arc
+  ctx.font = '500 11px Inter, sans-serif';
+  const nowStr = fmtHM(now);
+  let tw = ctx.measureText(nowStr).width;
+  let nowX = sx - tw / 2;
+  nowX = Math.max(lineX1, Math.min(lineX2 - tw, nowX));
+  ctx.fillText(nowStr, nowX, sy - 8);
+
+  // Sunrise (left) and sunset (right) times below the line
+  ctx.font = '500 11px Inter, sans-serif';
+  ctx.globalAlpha = 0.85;
+  ctx.fillText(fmtHM(tToday.sunrise), lineX1, horizonY + 16);
+  const ssStr = fmtHM(tToday.sunset);
+  const ssW = ctx.measureText(ssStr).width;
+  ctx.fillText(ssStr, lineX2 - ssW, horizonY + 16);
+  ctx.globalAlpha = 1;
+
+  // ── Big multi-line message + Oslo label (toggleable) ──
+  if (legendsEnabled) {
+    const todayLen = sunsetMs - sunriseMs;
+    const yestLen  = tYest.sunset.getTime() - tYest.sunrise.getTime();
+    const delta = todayLen - yestLen;
+    const isLonger = delta >= 0;
+    const dur = fmtDeltaWords(delta, isLonger);
+
+    const template = pickDailyMessage(now, isDay, isLonger);
+    const segments = parseTemplate(template, dur);
+
+    const fontFor = (bold) => `${bold ? 600 : 300} 19px Inter, sans-serif`;
+    const lines = wrapSegments(ctx, segments, W - 60, fontFor);
+
+    const lineHeight = 24;
+    let textY = 168;
+    ctx.fillStyle = theme.text;
+    for (const line of lines.slice(0, 3)) {
+      let cursorX = lineX1;
+      for (const seg of line) {
+        ctx.font = fontFor(seg.bold);
+        ctx.fillText(seg.text, cursorX, textY);
+        cursorX += ctx.measureText(seg.text).width;
+      }
+      textY += lineHeight;
+    }
+
+    ctx.font = '400 11px Inter, sans-serif';
+    ctx.globalAlpha = 0.6;
+    ctx.fillText('Oslo, Norway', lineX1, H - 12);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Device-state toggles (will be persisted to NVS on the device)
+let starsEnabled = true;
+let ledEnabled = true;
+let legendsEnabled = true;
+let brightness = 'high'; // 'low' | 'mid' | 'high'
+
+function tickClock() {
+  renderClock(ctxClock,      { stars: starsEnabled });
+  renderClock(ctxClockPlain, { stars: false });
+  renderDaylight(ctxDaylight);
+  setTimeout(() => requestAnimationFrame(tickClock), 1000);
+}
+
+// ── Wire up the device-control buttons ──
+document.getElementById('led-toggle').addEventListener('click', () => {
+  ledEnabled = !ledEnabled;
+  document.getElementById('led-dot').classList.toggle('off', !ledEnabled);
+  document.getElementById('led-toggle').classList.toggle('active', ledEnabled);
+});
+document.getElementById('starfield-toggle').addEventListener('click', () => {
+  starsEnabled = !starsEnabled;
+  const btn = document.getElementById('starfield-toggle');
+  btn.textContent = `Starfield ${starsEnabled ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('active', starsEnabled);
+});
+document.getElementById('legend-toggle').addEventListener('click', () => {
+  legendsEnabled = !legendsEnabled;
+  const btn = document.getElementById('legend-toggle');
+  btn.textContent = `Legends ${legendsEnabled ? 'ON' : 'OFF'}`;
+  btn.classList.toggle('active', legendsEnabled);
+});
+// Daylight date-override toggle
+function dateForKey(key) {
+  const y = new Date().getFullYear();
+  if (key === 'spring')   return new Date(y, 2, 20, 14, 0);
+  if (key === 'summer')   return new Date(y, 5, 21, 14, 0);
+  if (key === 'autumn')   return new Date(y, 8, 22, 14, 0);
+  if (key === 'winter')   return new Date(y, 11, 21, 14, 0);
+  if (key === 'midnight') {
+    const d = new Date(); d.setHours(0, 30); return d;
+  }
+  return null; // 'now'
+}
+document.querySelectorAll('[data-day]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-day]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    daylightDateOverride = dateForKey(btn.dataset.day);
+  });
+});
+
+document.getElementById('brightness-cycle').addEventListener('click', () => {
+  brightness = brightness === 'high' ? 'mid' : brightness === 'mid' ? 'low' : 'high';
+  document.querySelectorAll('.frame').forEach(f => {
+    f.classList.remove('dim-low', 'dim-mid');
+    if (brightness === 'low') f.classList.add('dim-low');
+    if (brightness === 'mid') f.classList.add('dim-mid');
+  });
+  document.getElementById('brightness-cycle').textContent = `Brightness ${brightness.toUpperCase()}`;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3b/3c · ORBIT SKETCHES — 2D map inside Earth circle, city-of-interest marked
+// ─────────────────────────────────────────────────────────────────────────────
+const OSLO = { lat: 59.9139, lng: 10.7522 };
+
+// Cities for the orbit sketch frames. Each picks a projection centered such
+// that the city sits prominently in the upper portion of the visible disc.
+const CITIES = {
+  oslo:   { name: 'Oslo',   lat: 59.9139, lng: 10.7522, centerLat: 30, centerLng: 10 },
+  warsaw: { name: 'Warsaw', lat: 52.2297, lng: 21.0122, centerLat: 30, centerLng: 21 },
+};
+
+// Sketch geometry — same for both city views; centerLat/Lng overridden per render
+const SKETCH = {
+  earthR: 60,
+  earthCx: W / 2,
+  earthCy: 120,
+  issR: 105,
+  cssR: 88,
+  issInc: 51.6,
+  cssInc: 41.5,
+  centerLat: 30, // overridden per render
+  centerLng: 10,
+};
+
+let countries = null;
+async function loadCountries() {
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson');
+    countries = await r.json();
+  } catch (e) {
+    console.warn('country load failed', e);
+  }
+}
+
+// Orthographic projection of (lat, lng) onto a circle centered on (centerLat, centerLng)
+function project(lat, lng, centerLat, centerLng, R) {
+  const phi  = lat * Math.PI / 180;
+  const lam  = (lng - centerLng) * Math.PI / 180;
+  const phi0 = centerLat * Math.PI / 180;
+
+  const x = Math.cos(phi) * Math.sin(lam);
+  const y = Math.sin(phi);
+  const z = Math.cos(phi) * Math.cos(lam);
+
+  // Rotate by +phi0 around X axis: brings (lat=centerLat, lng=centerLng) to (0,0,1)
+  const yp = y * Math.cos(phi0) - z * Math.sin(phi0);
+  const zp = y * Math.sin(phi0) + z * Math.cos(phi0);
+
+  return { x: x * R, y: -yp * R, visible: zp > 0 };
+}
+
+function drawCountryMap(ctx) {
+  if (!countries) return;
+  ctx.save();
+  // Clip so country lines don't bleed outside the Earth disc
+  ctx.beginPath();
+  ctx.arc(SKETCH.earthCx, SKETCH.earthCy, SKETCH.earthR - 0.5, 0, Math.PI * 2);
+  ctx.clip();
+
+  ctx.strokeStyle = 'rgba(170,195,230,0.32)';
+  ctx.lineWidth = 0.6;
+
+  for (const feat of countries.features) {
+    const geom = feat.geometry;
+    if (!geom) continue;
+    const polygons = geom.type === 'Polygon' ? [geom.coordinates]
+                   : geom.type === 'MultiPolygon' ? geom.coordinates
+                   : [];
+    for (const poly of polygons) {
+      for (const ring of poly) {
+        ctx.beginPath();
+        let started = false;
+        for (const pair of ring) {
+          const lng = pair[0], lat = pair[1];
+          const p = project(lat, lng, SKETCH.centerLat, SKETCH.centerLng, SKETCH.earthR);
+          if (!p.visible) { started = false; continue; }
+          const px = SKETCH.earthCx + p.x;
+          const py = SKETCH.earthCy + p.y;
+          if (!started) { ctx.moveTo(px, py); started = true; }
+          else          { ctx.lineTo(px, py); }
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ── True 3D orbit ring projected through the same ortho camera as the map ──
+// Real altitude is tiny vs Earth radius (408km / 6371km ≈ 6%) so we exaggerate
+// it visually. Same scale for both orbits so their relative sizes stay accurate.
+const ALT_SCALE_PX_PER_KM = 0.12;
+
+function vecCross(a, b) {
+  return { x: a.y*b.z - a.z*b.y, y: a.z*b.x - a.x*b.z, z: a.x*b.y - a.y*b.x };
+}
+function vecMag(v)  { return Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
+function vecNorm(v) { const m = vecMag(v); return { x: v.x/m, y: v.y/m, z: v.z/m }; }
+
+// Project (lat, lng, altKm) through the ortho camera. Returns 3D coords in
+// canvas-pixel units; z is depth (positive = toward camera).
+function projectAlt(lat, lng, altKm) {
+  const phi  = lat * Math.PI / 180;
+  const lam  = (lng - SKETCH.centerLng) * Math.PI / 180;
+  const phi0 = SKETCH.centerLat * Math.PI / 180;
+
+  const ux = Math.cos(phi) * Math.sin(lam);
+  const uy = Math.sin(phi);
+  const uz = Math.cos(phi) * Math.cos(lam);
+
+  const yp = uy * Math.cos(phi0) - uz * Math.sin(phi0);
+  const zp = uy * Math.sin(phi0) + uz * Math.cos(phi0);
+
+  const R = SKETCH.earthR + altKm * ALT_SCALE_PX_PER_KM;
+  return { x: ux * R, y: -yp * R, z: zp * R };
+}
+
+// Is a 3D point hidden behind the Earth sphere?
+function occludedByEarth(p) {
+  const r2 = p.x * p.x + p.y * p.y;
+  const er2 = SKETCH.earthR * SKETCH.earthR;
+  if (r2 >= er2) return false;
+  return p.z < Math.sqrt(er2 - r2);
+}
+
+// Sample the satellite's TRAIL — its actual ground positions over the past
+// orbit, propagated backward in time. pts[0] = current (right at the dot),
+// pts[end] = ~one orbital period ago (closes the loop in front of the dot).
+// This naturally produces a comet-trail gradient when drawn with fading alpha.
+function computeOrbitRing3D(satrec, now, durationMin = 92, stepSec = 30) {
+  if (!satrec) return [];
+  const pts = [];
+  for (let s = 0; s <= durationMin * 60; s += stepSec) {
+    const t = new Date(now.getTime() - s * 1000);
+    const pv = satellite.propagate(satrec, t);
+    if (!pv || !pv.position) continue;
+    const gmst = satellite.gstime(t);
+    const geo = satellite.eciToGeodetic(pv.position, gmst);
+    pts.push({
+      lat: satellite.degreesLat(geo.latitude),
+      lng: satellite.degreesLong(geo.longitude),
+      alt: geo.height,
+    });
+  }
+  return pts;
+}
+
+function drawAccurateOrbit(ctx, satrec, color565, now) {
+  if (!satrec) return;
+  const samples = computeOrbitRing3D(satrec, now);
+  if (samples.length < 2) return;
+
+  const projected = samples.map(p => projectAlt(p.lat, p.lng, p.alt));
+  const c = rgb565(color565);
+  const N = projected.length;
+
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = c;
+  // Iterate from sat (i=0) backward through the trail (i increasing). Opacity
+  // is high near the dot and fades toward 0 at the loop's far end.
+  for (let i = 0; i < N - 1; i++) {
+    const a = projected[i];
+    const b = projected[i + 1];
+    if (Math.abs(a.x - b.x) > SKETCH.earthR * 1.4) continue;
+
+    // Comet-trail alpha: 1 right behind the satellite, dropping toward 0.
+    // Pow makes the falloff feel softer/more dramatic at the tail end.
+    const trailAlpha = Math.pow(1 - i / N, 1.4);
+    const behindEarthDim = (occludedByEarth(a) || occludedByEarth(b)) ? 0.35 : 1;
+    ctx.globalAlpha = trailAlpha * behindEarthDim;
+
+    ctx.beginPath();
+    ctx.moveTo(SKETCH.earthCx + a.x, SKETCH.earthCy + a.y);
+    ctx.lineTo(SKETCH.earthCx + b.x, SKETCH.earthCy + b.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawAccurateSat(ctx, satrec, color565, now) {
+  if (!satrec) return;
+  const pos = propagate(satrec, now);
+  if (!pos.valid) return;
+  const p = projectAlt(pos.lat, pos.lon, pos.alt);
+  const cx = SKETCH.earthCx + p.x;
+  const cy = SKETCH.earthCy + p.y;
+
+  if (occludedByEarth(p)) {
+    // Behind Earth — draw a small dim marker only
+    ctx.fillStyle = rgb565((color565 >> 1) & 0x7BEF);
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+    return;
+  }
+
+  // In front — full glow + core
+  ctx.fillStyle = rgb565(color565 & 0x39E7);
+  ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = rgb565(color565);
+  ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = COL.TEXT_BRIGHT;
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+}
+
+function renderOrbitSketch(ctx, city) {
+  // Apply city-specific projection center for this render
+  SKETCH.centerLat = city.centerLat;
+  SKETCH.centerLng = city.centerLng;
+
+  fill(ctx, COL.BG);
+
+  // Earth disc — dark fill, faint outline
+  ctx.beginPath();
+  ctx.arc(SKETCH.earthCx, SKETCH.earthCy, SKETCH.earthR, 0, Math.PI * 2);
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.stroke();
+
+  drawCountryMap(ctx);
+
+  // Bright white city marker (only if visible from this projection center)
+  const c = project(city.lat, city.lng, SKETCH.centerLat, SKETCH.centerLng, SKETCH.earthR);
+  if (c.visible) {
+    const px = SKETCH.earthCx + c.x;
+    const py = SKETCH.earthCy + c.y;
+    // Soft halo
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, 7);
+    grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, 7, 0, Math.PI * 2);
+    ctx.fill();
+    // Crisp white core
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // True 3D orbit rings + satellites, projected through the same ortho camera
+  const now = new Date();
+  drawAccurateOrbit(ctx, satrecs.iss, COL_ISS_565, now);
+  drawAccurateOrbit(ctx, satrecs.css, COL_CSS_565, now);
+  drawAccurateSat(ctx,  satrecs.iss, COL_ISS_565, now);
+  drawAccurateSat(ctx,  satrecs.css, COL_CSS_565, now);
+
+  // Simplified 3-item legend (toggleable): full-strength dot + dimmed label
+  if (legendsEnabled) {
+    setText(ctx, FONT.TINY, COL.TEXT_BRIGHT);
+    const items = [
+      { label: 'ISS',     color: COL.ISS_DOT },
+      { label: 'CSS',     color: COL.CSS_DOT },
+      { label: city.name, color: '#ffffff'   },
+    ];
+    let cursorX = 14;
+    for (const item of items) {
+      // Dot at full opacity — pops against the dark bg
+      circle(ctx, cursorX, STATUS_Y + 6, 3, item.color);
+      // Label at lower opacity so the dot does the visual work
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.label, cursorX + 8, STATUS_Y + 10);
+      ctx.globalAlpha = 1;
+      cursorX += 8 + ctx.measureText(item.label).width + 22;
+    }
+  }
+}
+
+const ctxSketch       = document.getElementById('cv-orbit-sketch').getContext('2d');
+const ctxSketchWarsaw = document.getElementById('cv-orbit-sketch-warsaw').getContext('2d');
+function tickSketch() {
+  renderOrbitSketch(ctxSketch,       CITIES.oslo);
+  renderOrbitSketch(ctxSketchWarsaw, CITIES.warsaw);
+  requestAnimationFrame(tickSketch);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+
+# Built binaries — recreated by `pio run`
+*.bin
+*.elf
+*.map
+
+# Local snapshot of pre-built binaries (handy for re-flashing without rebuild,
+# but not committed — distribute via GitHub Releases instead)
+builds/
+
+# Vendored 3rd-party libraries — these come from PlatformIO `lib_deps`. We
+# don't commit them so the repo stays small and dependencies stay current.
+lib/
+
+# Local secrets / overrides (just in case)
+secrets.h
+secrets.*
+.env
+.env.local
+
+# bdfconv binary (host-built, regenerate via tools/build_inter_font.sh)
+tools/bdfconv
+
+# Editor / OS noise
+.DS_Store
+.idea/
+*.swp
+*~
