@@ -2,6 +2,21 @@
 
 All notable changes to SpaceTracker will be documented in this file.
 
+## [1.0.3] — 2026-04-26
+
+### Fixed
+- Simple orbit view (`view_orbit.cpp`) now respects the `legendsOn` toggle
+  — long-press B1 properly hides the bottom status bar like it does on
+  every other view.
+
+### Changed
+- Daylight tracker color gradient is now noticeably different between
+  morning and afternoon at the same sun altitude. Previously the AM and
+  PM stops at 12°/25°/45° were identical, which made the daytime palette
+  feel static. Morning now trends gold; afternoon trends peach.
+- Daylight refresh interval lowered 5 min → 60 s so the gradient drift
+  through the day is actually visible.
+
 ## [1.0.2] — 2026-04-26
 
 ### Changed

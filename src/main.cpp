@@ -387,8 +387,9 @@ void loop() {
         if (now - lastClockTick > 30000UL) { lastClockTick = now; dirty = true; }
     }
     if (state.currentView == VIEW_DAYLIGHT) {
-        // Sun moves 0.25°/min — 5 min refresh is more than enough.
-        if (now - lastDaylightTick > 300000UL) { lastDaylightTick = now; dirty = true; }
+        // 60s tick — slow enough that the AMOLED feels still, fast enough
+        // that the gradient drift through the day is actually visible.
+        if (now - lastDaylightTick > 60000UL) { lastDaylightTick = now; dirty = true; }
     }
 
     if (dirty) {

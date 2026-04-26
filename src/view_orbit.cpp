@@ -1,6 +1,7 @@
 #include "view_orbit.h"
 #include "display.h"
 #include "config.h"
+#include "state.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -137,6 +138,9 @@ void view_orbit_render(const SatState &iss, const SatState &tiangong, bool wifiC
 
     // ── Status bar — TINY font fits the full ISS + CSS coords on one line.
     // Inter Body would overlap because the data is too dense for half-width.
+    // Hidden when info text is toggled off (legends button / B1 long-press).
+    if (!state.legendsOn) return;
+
     gfx->setFont(FONT_TINY);
     gfx->setTextSize(1);
 
