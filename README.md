@@ -6,6 +6,10 @@
 
 Built on the **LilyGo T-Display S3 AMOLED** (the cute USB-stick form factor with a beautiful 240×536 screen). Six selectable views, two buttons, no apps, no accounts. Configure everything from a small built-in web portal — no re-flashing for routine changes.
 
+By [**Alkemist**](https://www.alkemist.no/) · originally made as a gift, then opened up.
+
+> Inspired by [Freddie Hong's gorgeous "humans in space" ticker](https://orbit.freddiehong.com) ([Reddit post](https://www.reddit.com/r/esp32/comments/1sspy67/i_made_a_thing_that_tells_you_how_many_people_are/)). His version is a beautiful single-purpose object; SpaceTracker takes the same idea and stretches it into a six-screen ambient display with orbits, a daylight tracker, a starfield clock, and a runtime-configurable web portal — all on the same LilyGo board. Counts both ISS and Tiangong crew (his counts only ISS).
+
 ---
 
 ## Table of contents
@@ -392,6 +396,7 @@ SpaceTracker/
 
 Standing on the shoulders of:
 
+- **[Freddie Hong](https://orbit.freddiehong.com)** for the original "humans in space" ticker that planted the seed for this project ([Reddit thread](https://www.reddit.com/r/esp32/comments/1sspy67/i_made_a_thing_that_tells_you_how_many_people_are/)).
 - **[Bakken & Bæck](https://github.com/bakkenbaeck/daylight-ios)** for the gorgeous Daylight iOS app design language — the daylight tracker view is a direct homage.
 - **[Volodymyr Agafonkin](https://github.com/mourner/suncalc)** for the suncalc.js algorithms.
 - **[hopperpop/Sgp4](https://github.com/Hopperpop/Sgp4-Library)** for the SGP4 orbital propagator.
