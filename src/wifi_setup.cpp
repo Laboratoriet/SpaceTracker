@@ -204,12 +204,17 @@ static void startCaptivePortal() {
 
     apServer.begin();
 
-    // Tell the user what to do, on the AMOLED itself
+    // Tell the user what to do, on the AMOLED itself.
+    // CRITICAL: every view_splash_render() must be followed by
+    // display_flush() — the render writes to the PSRAM canvas, the flush
+    // pushes it to the AMOLED.
     char line2[64];
     snprintf(line2, sizeof(line2), "Join %s", apSsid);
     view_splash_render(line2);
+    display_flush();
     delay(2000);
     view_splash_render("Open setup at 192.168.4.1");
+    display_flush();
 }
 
 bool wifi_setup_connect_or_portal() {

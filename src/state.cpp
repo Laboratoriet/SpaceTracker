@@ -4,40 +4,34 @@
 #include <Preferences.h>
 #include <string.h>
 
-State state;  // populated by stateInitDefaults() at module load
+State state;  // populated by state_load() (calls state_init_defaults_ first)
 
-// Init defaults via constructor pattern — avoids C99 designator restrictions
-// (gcc disallows designated initializers on aggregate members like char[] or
-// nested struct arrays in the same brace-init expression in some modes).
-struct StateDefaultsInit {
-    StateDefaultsInit() {
-        state.currentView     = VIEW_CREW;
-        state.brightnessLevel = BRIGHTNESS_LEVEL_HIGH;
-        state.currentCity     = 0;
-        state.ledOn           = true;
-        state.legendsOn       = true;
-        state.starsOn         = true;
-        for (int i = 0; i < VIEW_COUNT; i++) state.viewEnabled[i] = true;
-        state.cityCount = 2;
-        // City 0 — Oslo
-        strncpy(state.cities[0].name, "Oslo", sizeof(state.cities[0].name));
-        state.cities[0].lat       = 59.9139f;
-        state.cities[0].lng       = 10.7522f;
-        state.cities[0].centerLat = 30.0f;
-        state.cities[0].centerLng = 10.0f;
-        // City 1 — Warsaw
-        strncpy(state.cities[1].name, "Warsaw", sizeof(state.cities[1].name));
-        state.cities[1].lat       = 52.2297f;
-        state.cities[1].lng       = 21.0122f;
-        state.cities[1].centerLat = 30.0f;
-        state.cities[1].centerLng = 21.0f;
-        state.wifiSsid[0]    = 0;
-        state.wifiPass[0]    = 0;
-        state.ntpOffsetHours = 1;   // CET base
-        state.ntpDstHours    = 1;   // +1h DST
-    }
-};
-static StateDefaultsInit _stateDefaultsInit;
+// Apply default values to the in-memory state. Called from state_load() so
+// it always runs explicitly — never relying on C++ static init order.
+static void state_init_defaults() {
+    state.currentView     = VIEW_CREW;
+    state.brightnessLevel = BRIGHTNESS_LEVEL_HIGH;
+    state.currentCity     = 0;
+    state.ledOn           = true;
+    state.legendsOn       = true;
+    state.starsOn         = true;
+    for (int i = 0; i < VIEW_COUNT; i++) state.viewEnabled[i] = true;
+    state.cityCount = 2;
+    strncpy(state.cities[0].name, "Oslo", sizeof(state.cities[0].name));
+    state.cities[0].lat       = 59.9139f;
+    state.cities[0].lng       = 10.7522f;
+    state.cities[0].centerLat = 30.0f;
+    state.cities[0].centerLng = 10.0f;
+    strncpy(state.cities[1].name, "Warsaw", sizeof(state.cities[1].name));
+    state.cities[1].lat       = 52.2297f;
+    state.cities[1].lng       = 21.0122f;
+    state.cities[1].centerLat = 30.0f;
+    state.cities[1].centerLng = 21.0f;
+    state.wifiSsid[0]    = 0;
+    state.wifiPass[0]    = 0;
+    state.ntpOffsetHours = 1;   // CET base
+    state.ntpDstHours    = 1;   // +1h DST
+}
 
 static Preferences prefs;
 static const char* NAMESPACE = "tracker";
@@ -46,7 +40,8 @@ static const char* NAMESPACE = "tracker";
 static constexpr uint8_t STATE_VERSION = 3;
 
 void state_load() {
-    prefs.begin(NAMESPACE, true); // read-only
+    state_init_defaults();           // always start from defaults
+    prefs.begin(NAMESPACE, true);    // read-only
     uint8_t storedVersion = prefs.getUChar("ver", 0);
     if (storedVersion != STATE_VERSION) {
         // Fresh / outdated NVS — keep in-memory defaults, write the new

@@ -185,18 +185,40 @@ void renderCurrent() {
 
 // ── Setup ────────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(115200);
-    Serial.println("\n=== Space Tracker ===");
+    // Earliest sign-of-life: blink the green LED so we can see the board
+    // reached user code even if Serial / display fail later.
+    pinMode(PIN_LED, OUTPUT);
+    for (int i = 0; i < 4; i++) {
+        digitalWrite(PIN_LED, HIGH); delay(120);
+        digitalWrite(PIN_LED, LOW);  delay(120);
+    }
+    digitalWrite(PIN_LED, HIGH);  // leave on
 
+    Serial.begin(115200);
+    delay(2500);  // give USB-CDC time to enumerate so first prints are caught
+    Serial.println("\n=== Space Tracker boot ===");
+    Serial.flush();
+
+    Serial.println("[BOOT] before state_load");
+    Serial.flush();
     state_load();
+    Serial.println("[BOOT] after state_load");
+    Serial.flush();
+
+    // (diagnostic short-circuit removed — proper flow continues below)
     Serial.printf("State: view=%d bright=%d city=%d led=%d legends=%d stars=%d\n",
                   state.currentView, state.brightnessLevel, state.currentCity,
                   state.ledOn, state.legendsOn, state.starsOn);
 
+    Serial.println("[BOOT] before display_init");
     display_init();
+    Serial.println("[BOOT] after display_init");
     applyBrightness();
+    Serial.println("[BOOT] after applyBrightness");
     applyLed();
+    Serial.println("[BOOT] after applyLed");
     view_clock_initStars();
+    Serial.println("[BOOT] after initStars");
 
     btn1.attachClick(onBtn1Click);
     btn1.attachLongPressStart(onBtn1LongPress);
@@ -209,12 +231,16 @@ void setup() {
     // Load fallback TLEs immediately — orbit views work even if WiFi/TLS
     // never succeeds. A successful runtime fetch will overwrite these.
     loadFallbackTLEs();
+    Serial.println("[BOOT] after loadFallbackTLEs");
 
     // First-boot WiFi flow: try saved creds → on failure or empty creds,
     // launch captive portal AP. While in portal mode `wifi_setup_loop()`
     // takes over and we never proceed past WiFi setup.
     view_splash_render("Connecting...");
+    Serial.println("[BOOT] after splash render");
     bool wifiOK = wifi_setup_connect_or_portal();
+    Serial.printf("[BOOT] wifi_setup returned, wifiOK=%d, portal=%d\n",
+                  wifiOK, wifi_setup_in_portal_mode());
     wifiConnected = wifiOK;
 
     if (wifi_setup_in_portal_mode()) {

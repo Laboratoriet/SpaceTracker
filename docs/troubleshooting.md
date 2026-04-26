@@ -32,6 +32,18 @@ and pushes whole frames to the AMOLED in one shot. If you see flicker:
   Correct addresses: `0x0 bootloader.bin`, `0x8000 partitions.bin`,
   `0x10000 firmware.bin`.
 
+### Display stays blank but the green LED blinks at boot
+
+If you see the LED blink 4 times rapidly at boot but the screen never lights
+up, you likely added a new view/splash render somewhere and forgot to call
+`display_flush()` afterwards. Every render writes to the PSRAM canvas; only
+`display_flush()` actually pushes the canvas to the AMOLED.
+
+`view_splash_render()` auto-flushes since v1.0.1, but the per-view renders
+in `renderCurrent()` rely on `main.cpp`'s loop calling `display_flush()`
+exactly once per dirty cycle. If you add a render path outside that loop,
+remember to flush yourself.
+
 ### Display goes dark when toggling the LED
 
 If the display blanks when you long-press B2, your board may be a

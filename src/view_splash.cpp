@@ -27,4 +27,9 @@ void view_splash_render(const char* status) {
         gfx->setTextColor(COL_TEXT_DIM);
         display_drawCentered(160, status, COL_TEXT_DIM);
     }
+
+    // Splash is invoked from many places (boot, wifi setup, mid-startup) where
+    // the caller often forgets the flush. Always push the canvas to the
+    // AMOLED here so the user always sees the latest splash.
+    display_flush();
 }

@@ -2,6 +2,28 @@
 
 All notable changes to SpaceTracker will be documented in this file.
 
+## [1.0.1] — 2026-04-26
+
+First-flash fixes after hardware testing.
+
+### Fixed
+- `view_splash_render()` now always calls `display_flush()` internally —
+  the captive-portal splash transitions ("Connecting…" → "Join SpaceTracker-XXXX")
+  weren't appearing on the AMOLED because callers forgot to flush the canvas.
+- State defaults are now applied via an explicit `state_init_defaults()` call
+  inside `state_load()` instead of a C++ static-constructor pattern — avoids
+  the C++ static initialization order fiasco entirely.
+- Added an early 4-blink LED sign-of-life at the top of `setup()` so it's
+  always obvious whether the board reached user code, even if Serial /
+  display fail later.
+- Pinned `moononournation/GFX Library for Arduino` to `~1.4.0` — newer 1.6+
+  versions require an ESP32 core header (`esp32-hal-periman.h`) the pinned
+  framework version doesn't ship.
+
+### Documentation
+- New troubleshooting entry: "Display stays blank but the green LED blinks
+  at boot" (the `display_flush()` foot-gun).
+
 ## [1.0.0] — 2026-04-26
 
 First public release.
